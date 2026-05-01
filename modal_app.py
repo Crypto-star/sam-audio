@@ -41,10 +41,10 @@ sam_image = (
         "perception-models @ git+https://github.com/facebookresearch/perception_models@unpin-deps"
     )
     .pip_install("fastapi", "python-multipart")
-    .add_local_dir("/Users/hardik/HeyyBot/Sam-audio/repo", "/sam_audio_repo", copy=True)
+    .add_local_dir("./repo", "/sam_audio_repo", copy=True)
     .run_commands("cd /sam_audio_repo && pip install --no-deps .")
     .env({"HF_HOME": "/model_cache", "TORCH_HOME": "/model_cache"})
-    .add_local_dir("/Users/hardik/HeyyBot/Sam-audio/frontend", "/app")
+    .add_local_dir("./frontend", "/app")
 )
 
 # ---------------------------------------------------------------------------
