@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAM-Audio | Sound Separation</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c12;
+    --surface: #14141e;
+    --surface2: #1c1c2a;
+    --border: #2a2a3d;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --success: #22c55e;
+    --error: #ef4444;
+    --radius: 12px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  header { text-align: center; margin-bottom: 2.5rem; }
+  header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+  header h1 span { background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  header p { color: var(--text2); font-size: 0.875rem; margin-top: 0.25rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .card-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 1rem;
+  }
+
+  /* -- Dropzone --------------------------------------------------------- */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.05);
+  }
+  .dropzone.has-file { border-style: solid; border-color: var(--success); }
+  .dropzone-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .dropzone-text { color: var(--text2); font-size: 0.875rem; }
+  .dropzone-file { color: var(--text); font-weight: 500; margin-top: 0.5rem; }
+  .dropzone input[type="file"] { display: none; }
+
+  /* -- Controls --------------------------------------------------------- */
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 0.375rem; }
+  .control-group.full { grid-column: 1 / -1; }
+  .control-group label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  select, input[type="text"] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 0.6rem 0.75rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  select:focus, input[type="text"]:focus { border-color: var(--accent); }
+  select { cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.75rem center;
+    padding-right: 2rem;
+  }
+
+  .prompt-input { display: none; }
+  .prompt-input.active { display: block; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.7rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* -- Progress --------------------------------------------------------- */
+  .progress-section { display: none; }
+  .progress-section.active { display: block; }
+  .progress-bar-track {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .progress-text { font-size: 0.8rem; color: var(--text2); text-align: center; }
+
+  /* -- Results ---------------------------------------------------------- */
+  .results-section { display: none; }
+  .results-section.active { display: block; }
+
+  .track {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .track:last-child { margin-bottom: 0; }
+  .track-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .track-label { font-weight: 600; font-size: 0.9rem; }
+  .track-label.target { color: var(--success); }
+  .track-label.residual { color: var(--accent2); }
+
+  .track-actions { display: flex; gap: 0.5rem; }
+  .btn-sm {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-sm:hover { background: var(--border); }
+
+  .waveform-canvas {
+    width: 100%;
+    height: 64px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+  }
+
+  audio { width: 100%; height: 36px; outline: none; }
+  audio::-webkit-media-controls-panel { background: var(--surface); }
+
+  /* -- Error ------------------------------------------------------------ */
+  .error-msg {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--error);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: var(--error);
+    font-size: 0.85rem;
+    margin-top: 1rem;
+    display: none;
+  }
+  .error-msg.active { display: block; }
+
+  @media (max-width: 600px) {
+    .controls-grid { grid-template-columns: 1fr; }
+    .container { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1><span>SAM-Audio</span> Separator</h1>
+    <p>Isolate any sound from audio using text prompts</p>
+  </header>
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">Audio File</div>
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">🎵</div>
+      <div class="dropzone-text">Drop an audio file here or click to browse</div>
+      <div class="dropzone-file" id="fileName"></div>
+      <input type="file" id="fileInput" accept="audio/*,video/*,.wav,.mp3,.flac,.ogg,.m4a,.mp4,.mkv,.webm">
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="card-title">Separation Settings</div>
+    <div class="controls-grid">
+
+      <div class="control-group">
+        <label>Mode</label>
+        <select id="mode">
+          <option value="text">Text Prompt</option>
+          <option value="preset">Speaker Presets</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Model Size</label>
+        <select id="modelSize">
+          <option value="small">Small (fastest)</option>
+          <option value="base">Base (balanced)</option>
+          <option value="large" selected>Large (best quality)</option>
+        </select>
+      </div>
+
+      <!-- Text prompt input -->
+      <div class="control-group full prompt-input active" id="textPromptGroup">
+        <label>Describe the sound to extract</label>
+        <input type="text" id="description" placeholder='e.g. "man speaking", "guitar", "dog barking"'>
+      </div>
+
+      <!-- Preset dropdown -->
+      <div class="control-group full prompt-input" id="presetGroup">
+        <label>Select speaker / sound type</label>
+        <select id="preset">
+          <option value="male_voice">Male Voice</option>
+          <option value="female_voice">Female Voice</option>
+          <option value="child_voice">Child Voice</option>
+          <option value="narrator">Narrator</option>
+          <option value="speech">Speech (general)</option>
+          <option value="crowd">Crowd Talking</option>
+          <option value="singing_male">Male Singing</option>
+          <option value="singing_female">Female Singing</option>
+          <option value="music">Music</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Quality</label>
+        <select id="quality">
+          <option value="fast">Fast</option>
+          <option value="high">High Quality (slower)</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn" id="separateBtn" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M2 12h20"/></svg>
+      Separate Audio
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div class="card progress-section" id="progressSection">
+    <div class="card-title">Processing</div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">Starting …</div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- Results -->
+  <div class="card results-section" id="resultsSection">
+    <div class="card-title">Results</div>
+
+    <div class="track" id="trackOriginal">
+      <div class="track-header">
+        <div class="track-label">Original</div>
+      </div>
+      <canvas class="waveform-canvas" id="waveOriginal"></canvas>
+      <audio controls id="audioOriginal"></audio>
+    </div>
+
+    <div class="track" id="trackTarget">
+      <div class="track-header">
+        <div class="track-label target">Target (Extracted)</div>
+        <div class="track-actions">
+          <button class="btn-sm" id="dlTarget">Download WAV</button>
+        </div>
+      </div>
+      <canvas class="waveform-canvas" id="waveTarget"></canvas>
+      <audio controls id="audioTarget"></audio>
+    </div>
+
+    <div class="track" id="trackResidual">
+      <div class="track-header">
+        <div class="track-label residual">Residual (Everything Else)</div>
+        <div class="track-actions">
+          <button class="btn-sm" id="dlResidual">Download WAV</button>
+        </div>
+      </div>
+      <canvas class="waveform-canvas" id="waveResidual"></canvas>
+      <audio controls id="audioResidual"></audio>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let audioCtx = null;
+let selectedFile = null;
+let blobUrls = [];
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function revokeOldUrls() {
+  blobUrls.forEach(u => URL.revokeObjectURL(u));
+  blobUrls = [];
+}
+
+function trackUrl(url) { blobUrls.push(url); return url; }
+
+// -- Presets from API ----------------------------------------------------
+(async function loadPresets() {
+  try {
+    const presets = await fetch('/api/presets').then(r => r.json());
+    const sel = $('#preset');
+    sel.innerHTML = Object.entries(presets)
+      .map(([k, v]) => `<option value="${k}">${v.charAt(0).toUpperCase() + v.slice(1)}</option>`)
+      .join('');
+  } catch { /* use hardcoded fallback */ }
+})();
+
+// -- Mode toggle ---------------------------------------------------------
+$('#mode').addEventListener('change', e => {
+  const isText = e.target.value === 'text';
+  $('#textPromptGroup').classList.toggle('active', isText);
+  $('#presetGroup').classList.toggle('active', !isText);
+});
+
+// -- File upload ---------------------------------------------------------
+const dz = $('#dropzone');
+const fi = $('#fileInput');
+
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', () => { if (fi.files.length) handleFile(fi.files[0]); });
+
+function handleFile(file) {
+  if (file.size > 2 * 1024 ** 3) {
+    showError('File exceeds 2 GB limit');
+    return;
+  }
+  selectedFile = file;
+  dz.classList.add('has-file');
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  $('#fileName').textContent = `${file.name} (${sizeMB} MB)`;
+  $('#separateBtn').disabled = false;
+
+  revokeOldUrls();
+  const url = trackUrl(URL.createObjectURL(file));
+  $('#audioOriginal').src = url;
+  renderWaveform(file, '#waveOriginal', '#6366f1');
+}
+
+// -- Waveform rendering --------------------------------------------------
+async function renderWaveform(source, canvasSelector, color) {
+  const canvas = $(canvasSelector);
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  let arrayBuf;
+  if (source instanceof File || source instanceof Blob) {
+    arrayBuf = await source.arrayBuffer();
+  } else if (source instanceof ArrayBuffer) {
+    arrayBuf = source;
+  } else {
+    return;
+  }
+
+  const actx = getAudioCtx();
+  if (actx.state === 'suspended') await actx.resume();
+
+  let audioBuffer;
+  try {
+    audioBuffer = await actx.decodeAudioData(arrayBuf.slice(0));
+  } catch { return; }
+
+  const data = audioBuffer.getChannelData(0);
+  const w = rect.width;
+  const h = rect.height;
+  const step = Math.max(1, Math.floor(data.length / w));
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7;
+
+  for (let i = 0; i < w; i++) {
+    const start = i * step;
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[start + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const y1 = (1 - max) * h / 2;
+    const y2 = (1 - min) * h / 2;
+    ctx.fillRect(i, y1, 1, Math.max(1, y2 - y1));
+  }
+}
+
+// -- Submit job ----------------------------------------------------------
+$('#separateBtn').addEventListener('click', submitJob);
+
+async function submitJob() {
+  if (!selectedFile) return;
+
+  const mode = $('#mode').value;
+  const form = new FormData();
+  form.append('audio', selectedFile);
+  form.append('model_size', $('#modelSize').value);
+  form.append('quality_mode', $('#quality').value);
+
+  if (mode === 'text') {
+    const desc = $('#description').value.trim();
+    if (!desc) { showError('Enter a text prompt describing the sound to extract'); return; }
+    form.append('description', desc);
+  } else {
+    form.append('preset', $('#preset').value);
+  }
+
+  hideError();
+  showProgress();
+  $('#separateBtn').disabled = true;
+  $('#resultsSection').classList.remove('active');
+
+  try {
+    const res = await fetch('/api/separate', { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Upload failed');
+    }
+    const { job_id } = await res.json();
+    pollJob(job_id);
+  } catch (e) {
+    showError(e.message);
+    hideProgress();
+    $('#separateBtn').disabled = false;
+  }
+}
+
+// -- Poll job via SSE ----------------------------------------------------
+function pollJob(jobId) {
+  let settled = false;
+  const es = new EventSource(`/api/jobs/${jobId}/events`);
+
+  es.onmessage = e => {
+    let data;
+    try { data = JSON.parse(e.data); } catch { return; }
+    updateProgress(data.progress, data.message);
+
+    if (data.status === 'done') {
+      settled = true;
+      es.close();
+      loadResults(jobId);
+    } else if (data.status === 'error') {
+      settled = true;
+      es.close();
+      showError(data.message);
+      hideProgress();
+      $('#separateBtn').disabled = false;
+    }
+  };
+
+  es.onerror = () => {
+    if (settled) return;
+    es.close();
+    showError('Connection lost. Check if the server is running.');
+    hideProgress();
+    $('#separateBtn').disabled = false;
+  };
+}
+
+// -- Load results --------------------------------------------------------
+async function loadResults(jobId) {
+  updateProgress(100, 'Loading results …');
+
+  const targetUrl = `/api/jobs/${jobId}/download/target`;
+  const residualUrl = `/api/jobs/${jobId}/download/residual`;
+
+  try {
+    revokeOldUrls();
+
+    // Stream audio directly from server URLs for playback (avoids loading full file into JS heap)
+    const tPlayUrl = trackUrl(targetUrl);
+    const rPlayUrl = trackUrl(residualUrl);
+    $('#audioTarget').src = tPlayUrl;
+    $('#audioResidual').src = rPlayUrl;
+
+    // Show results section BEFORE rendering waveforms (so canvas has non-zero dimensions)
+    $('#resultsSection').classList.add('active');
+    hideProgress();
+    $('#separateBtn').disabled = false;
+
+    // Fetch buffers for waveform rendering sequentially to limit memory
+    const tRes = await fetch(targetUrl);
+    if (!tRes.ok) throw new Error(`Download failed: ${tRes.status}`);
+    const targetBuf = await tRes.arrayBuffer();
+    await renderWaveform(targetBuf, '#waveTarget', '#22c55e');
+
+    const rRes = await fetch(residualUrl);
+    if (!rRes.ok) throw new Error(`Download failed: ${rRes.status}`);
+    const residualBuf = await rRes.arrayBuffer();
+    await renderWaveform(residualBuf, '#waveResidual', '#818cf8');
+
+    // Download buttons use direct server URLs
+    $('#dlTarget').onclick = () => { window.location.href = targetUrl; };
+    $('#dlResidual').onclick = () => { window.location.href = residualUrl; };
+
+  } catch (e) {
+    showError('Failed to load results: ' + e.message);
+    hideProgress();
+    $('#separateBtn').disabled = false;
+  }
+}
+
+// -- UI helpers ----------------------------------------------------------
+function showProgress() {
+  $('#progressSection').classList.add('active');
+  updateProgress(0, 'Starting …');
+}
+function hideProgress() { $('#progressSection').classList.remove('active'); }
+function updateProgress(pct, msg) {
+  $('#progressBar').style.width = pct + '%';
+  $('#progressText').textContent = msg;
+}
+function showError(msg) { const el = $('#errorMsg'); el.textContent = msg; el.classList.add('active'); }
+function hideError() { $('#errorMsg').classList.remove('active'); }
+</script>
+</body>
+</html>
